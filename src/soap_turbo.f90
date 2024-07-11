@@ -547,9 +547,36 @@ end if
   call cpy_htod(c_loc(atom_sigma_t_scaling),atom_sigma_t_scaling_d, & 
                                                st_size_atom_sigma_t, gpu_stream)
 
-  
+   mode = 0
+  if( scaling_mode == "polynomial" ) mode =1
+  if( basis == "poly3gauss" )then
+    call gpu_radial_poly3gauss(n_atom_pairs, n_species, mask_d, rjs_d, rcut_hard_d, n_sites, n_neigh_d, n_max, ntemp,&
+                               c_do_derivatives, radial_exp_coeff_d, radial_exp_coeff_der_d, rcut_soft_d, atom_sigma_r_d, &
+                               radial_exp_coeff_temp1_d, radial_exp_coeff_temp2_d, radial_exp_coeff_der_temp_d, i_beg_d, &
+                               i_end_d, atom_sigma_r_scaling_d, mode, radial_enhancement, amplitude_scaling_d, alpha_max_d, &
+                               nf_d, ntemp_der, W_d, gpu_stream) 
+!     call get_radial_expansion_coefficients_poly3gauss(n_sites, n_neigh, rjs, alpha_max(i), rcut_soft(i), &
+!                                                       rcut_hard(i), atom_sigma_r(i), atom_sigma_r_scaling(i), &
+!                                                       amplitude_scaling(i), nf(i), W(i_beg(i):i_end(i),i_beg(i):i_end(i)), &
+!                                                       scaling_mode, mask(:,i), radial_enhancement, do_derivatives, &
+!                                                       radial_exp_coeff(i_beg(i):i_end(i), :), &
+!                                                       radial_exp_coeff_der(i_beg(i):i_end(i), :), k_idx(1:n_sites))
+  else if( basis == "poly3" )then
+    call gpu_radial_poly3(n_atom_pairs, n_species, mask_d, rjs_d, rcut_hard_d, n_sites, n_neigh_d, n_max, ntemp,&
+                          c_do_derivatives, radial_exp_coeff_d, radial_exp_coeff_der_d, rcut_soft_d, atom_sigma_r_d, &
+                          radial_exp_coeff_temp1_d, radial_exp_coeff_temp2_d, radial_exp_coeff_der_temp_d, i_beg_d, &
+                          i_end_d, atom_sigma_r_scaling_d, mode, radial_enhancement, amplitude_scaling_d, alpha_max_d, &
+                          nf_d, ntemp_der, W_d, do_central_d, central_weight_d, gpu_stream) 
+!     call get_radial_expansion_coefficients_poly3(n_sites, n_neigh, rjs, alpha_max(i), rcut_soft(i), &
+!                                                  rcut_hard(i), atom_sigma_r(i), atom_sigma_r_scaling(i), &
+!                                                  amplitude_scaling(i), nf(i), W(i_beg(i):i_end(i),i_beg(i):i_end(i)), &
+!                                                  scaling_mode, mask(:,i), radial_enhancement, do_derivatives, &
+!                                                  do_central(i), central_weight(i), &
+!                                                  radial_exp_coeff(i_beg(i):i_end(i), :), &
+!                                                  radial_exp_coeff_der(i_beg(i):i_end(i), :) )
+  end if
 
-  call gpu_get_radial_exp_coeff_poly3gauss(radial_exp_coeff_d, radial_exp_coeff_der_d, &
+  call  gpu_get_radial_exp_coeff_scaling(radial_exp_coeff_d, radial_exp_coeff_der_d, &
                                 i_beg_d, i_end_d, &
                                 global_scaling_d, &
                                 n_max, n_atom_pairs, n_species, &
