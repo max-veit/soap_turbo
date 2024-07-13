@@ -78,7 +78,8 @@ module soap_turbo_desc
   complex(c_double_complex), allocatable, target :: angular_exp_coeff_pol_der(:,:)
   complex(c_double_complex), allocatable, target :: eimphi(:), prefm(:), eimphi_rad_der(:)
 
-  real(c_double), allocatable,target, save :: W(:,:), S(:,:), multiplicity_array(:)
+  real(c_double), allocatable,target, save :: W(:,:), S(:,:), multiplicity_array(:) 
+  real(c_double), allocatable,target ::W_check(:,:), S_check(:,:)
   real(c_double), allocatable,target :: soap_rad_der(:,:), sqrt_dot_p(:), soap_azi_der(:,:)
   real*8, allocatable :: W_temp(:,:), S_temp(:,:)
   real(c_double), allocatable,target :: radial_exp_coeff(:,:), soap_pol_der(:,:)
@@ -265,14 +266,17 @@ module soap_turbo_desc
 
   if( recompute_basis )then
     if( W_S_initialized )then
-     ! deallocate(W, S)
       call gpu_free_async(W_d,gpu_stream)
       call gpu_free_async(S_d,gpu_stream)
     end if
-!    allocate( W(1:n_max, 1:n_max) )
-!    allocate( S(1:n_max, 1:n_max) )
-!    W = 0.d0
-!    S = 0.d0
+    if( allocated(W) .or. allocated(S) )then
+      deallocate(W, S)
+    end if
+    allocate( W(1:n_max, 1:n_max) )
+    allocate( S(1:n_max, 1:n_max) )
+    W = 0.d0
+    S = 0.d0
+
     size_tmp_var = n_max*n_max*c_double
     call gpu_malloc_all(W_d,size_tmp_var, gpu_stream)
     call gpu_malloc_all(S_d,size_tmp_var, gpu_stream)
@@ -289,31 +293,48 @@ module soap_turbo_desc
     do i = 1, n_species
 !     We pass these temp arrays with the right size because the Lapack/Blas routines internally fail
 !     if the memory is not contiguous
-!      allocate( S_temp(1:alpha_max(i), 1:alpha_max(i)) )
-!      allocate( W_temp(1:alpha_max(i), 1:alpha_max(i)) )
+      allocate( S_temp(1:alpha_max(i), 1:alpha_max(i)) )
+      allocate( W_temp(1:alpha_max(i), 1:alpha_max(i)) )
      
-!      S_temp = 0.d0
-!      W_temp = 0.d0
+     S_temp = 0.d0
+     W_temp = 0.d0
       if( basis == "poly3gauss" )then
-!        call get_orthonormalization_matrix_poly3gauss(alpha_max(i), atom_sigma_r(i), rcut_hard(i), S_temp, W_temp)
-        call get_orthonormalization_matrix_poly3gauss_gpu(alpha_max(i), atom_sigma_r(i), rcut_hard(i), S_d_work, W_d_work, cublas_handle, gpu_stream)
+        call get_orthonormalization_matrix_poly3gauss(alpha_max(i), atom_sigma_r(i), rcut_hard(i), S_temp, W_temp)
+        !call get_orthonormalization_matrix_poly3gauss_gpu(alpha_max(i), atom_sigma_r(i), rcut_hard(i), S_d_work, W_d_work, cublas_handle, gpu_stream)
       else if( basis == "poly3" )then
-!        call get_orthonormalization_matrix_poly3(alpha_max(i), S_temp, W_temp)
-        call get_orthonormalization_matrix_poly3_gpu(alpha_max(i), c_loc(S_temp), c_loc(W_temp), cublas_handle, gpu_stream)
+        call get_orthonormalization_matrix_poly3(alpha_max(i), S_temp, W_temp)
+       ! call get_orthonormalization_matrix_poly3_gpu(alpha_max(i), c_loc(S_temp), c_loc(W_temp), cublas_handle, gpu_stream)
       end if
-!      S(i_beg(i):i_end(i), i_beg(i):i_end(i)) = S_temp
-!      W(i_beg(i):i_end(i), i_beg(i):i_end(i)) = W_temp
+      S(i_beg(i):i_end(i), i_beg(i):i_end(i)) = S_temp
+      W(i_beg(i):i_end(i), i_beg(i):i_end(i)) = W_temp
       !not sure here. -1 should be needed for the fortran to c start indexes.
 !        write(0,*) "calling copy"
-      call orthonormalization_copy_to_global_matrix(S_d_work,S_d,alpha_max(i),i_beg(i)-1,n_max,gpu_stream)
+      !call orthonormalization_copy_to_global_matrix(S_d_work,S_d,alpha_max(i),i_beg(i)-1,n_max,gpu_stream)
 !        write(0,*) "calling done"
-      call orthonormalization_copy_to_global_matrix(W_d_work,W_d,alpha_max(i),i_beg(i)-1,n_max,gpu_stream)
+      !call orthonormalization_copy_to_global_matrix(W_d_work,W_d,alpha_max(i),i_beg(i)-1,n_max,gpu_stream)
 !        write(0,*) "second calling done"
 !      deallocate( S_temp, W_temp )
     end do
     call gpu_free_async(S_d_work,gpu_stream)
     call gpu_free_async(W_d_work,gpu_stream)
   end if
+
+
+  size_tmp_var = n_max*n_max*c_double
+  call cpy_htod(c_loc(S),S_d,size_tmp_var,gpu_stream)
+  call cpy_htod(c_loc(W),W_d,size_tmp_var,gpu_stream)
+  ! allocate( W_check(1:n_max, 1:n_max) )
+  ! allocate( S_check(1:n_max, 1:n_max) )
+  ! size_tmp_var = n_max*n_max*c_double
+  ! call cpy_dtoh_blocking(S_d,c_loc(S_check), size_tmp_var)
+  ! call cpy_dtoh_blocking(W_d,c_loc(W_check), size_tmp_var)
+  ! do j=1,n_max
+  !   do i=1,n_max
+  !     write(*,*) i,j, S(i,j)-S_check(i,j), W(i,j)-W_check(i,j)
+  !     enddo
+  ! enddo
+
+  ! stop
 
   if( do_timing )then
     call cpu_time(time2)
@@ -471,11 +492,11 @@ module soap_turbo_desc
   ntemp_der_d=ntemp_der*n_atom_pairs*sizeof(radial_exp_coeff_der(1,1))
   st_rad_exp_coeff_der_double=n_max*n_atom_pairs*sizeof(radial_exp_coeff_der(1,1))
   call gpu_malloc_all(radial_exp_coeff_d, st_rad_exp_coeff_der_double, gpu_stream)
-  call cpy_htod(c_loc(radial_exp_coeff),radial_exp_coeff_d, st_rad_exp_coeff_der_double, gpu_stream)
+  !call cpy_htod(c_loc(radial_exp_coeff),radial_exp_coeff_d, st_rad_exp_coeff_der_double, gpu_stream)
   call gpu_malloc_all(radial_exp_coeff_temp1_d, ntemp_d, gpu_stream)
   call gpu_malloc_all(radial_exp_coeff_temp2_d, ntemp_d, gpu_stream)
   call gpu_malloc_all(radial_exp_coeff_der_d, st_rad_exp_coeff_der_double, gpu_stream)
-  call cpy_htod(c_loc(radial_exp_coeff_der),radial_exp_coeff_der_d, st_rad_exp_coeff_der_double, gpu_stream)
+  !call cpy_htod(c_loc(radial_exp_coeff_der),radial_exp_coeff_der_d, st_rad_exp_coeff_der_double, gpu_stream)
   call gpu_malloc_all(radial_exp_coeff_der_temp_d, ntemp_der_d , gpu_stream) 
 
   size_i_beg=size(i_beg,1)
@@ -1035,7 +1056,8 @@ module soap_turbo_desc
   call gpu_free_async(sqrt_dot_p_d,gpu_stream)
 ! call gpu_free_async(central_weight_d,gpu_stream)
 !  call gpu_free_async(global_scaling_d,gpu_stream)
-  call gpu_free_async(cnk_d,gpu_stream)
+  !call gpu_free_async(cnk_d,gpu_stream)
+  call gpu_free(cnk_d)
   
   !call cpu_time(ttt(2))
   ttt(2)=MPI_Wtime()
