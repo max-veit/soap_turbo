@@ -320,9 +320,12 @@ module soap_turbo_desc
   end if
 
 
+  ttt(1)=MPI_Wtime() 
   size_tmp_var = n_max*n_max*c_double
-  call cpy_htod(c_loc(S),S_d,size_tmp_var,gpu_stream)
-  call cpy_htod(c_loc(W),W_d,size_tmp_var,gpu_stream)
+  call cpy_htod_blocking(c_loc(S),S_d,size_tmp_var)
+  call cpy_htod_blocking(c_loc(W),W_d,size_tmp_var)
+  ! call cpy_htod(c_loc(S),S_d,size_tmp_var,gpu_stream)
+  ! call cpy_htod(c_loc(W),W_d,size_tmp_var,gpu_stream)
   ! allocate( W_check(1:n_max, 1:n_max) )
   ! allocate( S_check(1:n_max, 1:n_max) )
   ! size_tmp_var = n_max*n_max*c_double
@@ -492,10 +495,12 @@ module soap_turbo_desc
   ntemp_der_d=ntemp_der*n_atom_pairs*sizeof(radial_exp_coeff_der(1,1))
   st_rad_exp_coeff_der_double=n_max*n_atom_pairs*sizeof(radial_exp_coeff_der(1,1))
   call gpu_malloc_all(radial_exp_coeff_d, st_rad_exp_coeff_der_double, gpu_stream)
+  call gpu_memset_async(radial_exp_coeff_d,0, st_rad_exp_coeff_der_double, gpu_stream)
   !call cpy_htod(c_loc(radial_exp_coeff),radial_exp_coeff_d, st_rad_exp_coeff_der_double, gpu_stream)
   call gpu_malloc_all(radial_exp_coeff_temp1_d, ntemp_d, gpu_stream)
   call gpu_malloc_all(radial_exp_coeff_temp2_d, ntemp_d, gpu_stream)
   call gpu_malloc_all(radial_exp_coeff_der_d, st_rad_exp_coeff_der_double, gpu_stream)
+  call gpu_memset_async(radial_exp_coeff_der_d,0, st_rad_exp_coeff_der_double, gpu_stream)
   !call cpy_htod(c_loc(radial_exp_coeff_der),radial_exp_coeff_der_d, st_rad_exp_coeff_der_double, gpu_stream)
   call gpu_malloc_all(radial_exp_coeff_der_temp_d, ntemp_der_d , gpu_stream) 
 
@@ -564,7 +569,7 @@ module soap_turbo_desc
   ! endif
   ! enddo
   ! enddo
-  ttt(1)=MPI_Wtime() 
+  ! ttt(1)=MPI_Wtime() 
   allocate(k2_i_site(1:n_atom_pairs))
   !write(*,*) "N atom pairs", n_atom_pairs
   allocate(k2_start(1:n_sites))
@@ -776,8 +781,8 @@ module soap_turbo_desc
                              W_d, S_d, size_1_species, gpu_stream)
 
 
-    call cpy_htod(c_loc(soap), soap_d, st_soap, gpu_stream)
-
+    !call cpy_htod(c_loc(soap), soap_d, st_soap, gpu_stream)
+  call gpu_memset_async(soap_d, 0, st_soap, gpu_stream)
 ! 12.6 s
   !call cpu_time(ttt(1)) 
   ! ttt(1)=MPI_Wtime()
